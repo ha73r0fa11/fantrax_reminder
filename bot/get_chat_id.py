@@ -54,7 +54,7 @@ def main() -> int:
         )
         return 1
 
-    print("Найденные чаты (скопируйте нужный id в TELEGRAM_CHAT_ID):")
+    print("Найденные чаты (скопируйте нужный id в mapping.json):")
     for chat_id, title in chats.items():
         print(f"  {chat_id}  {title}")
     return 0

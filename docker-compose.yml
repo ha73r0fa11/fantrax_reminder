@@ -4,8 +4,11 @@ services:
     env_file: .env
     environment:
       - STATE_FILE=/data/state.json
+      - MAPPING_FILE=/data/mapping.json
     volumes:
       - bot-data:/data
+      # Файл привязки редактируется на сервере рядом с docker-compose.yml.
+      - ./mapping.json:/data/mapping.json:ro
     restart: unless-stopped
 
 volumes:

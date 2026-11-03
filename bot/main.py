@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 
 from .config import load_config
 from .fantrax import FantraxClient
+from .mapping import load_mapping, resolve_chat_ids
 from .notifier import send_telegram
 from .state import State
 from .statuses import PlayerIssue, detect_issues
@@ -44,6 +45,15 @@ def run_once(cfg, client: FantraxClient, state: State) -> int:
         log.warning("В лиге не найдено команд.")
         return 0
 
+    # Привязку читаем каждый раз — правки mapping.json подхватываются без рестарта.
+    mapping = load_mapping(cfg.mapping_file)
+    chat_ids = resolve_chat_ids(mapping, teams)
+    if not chat_ids:
+        log.warning(
+            "В привязке (%s) нет ни одной команды — уведомлять будет некого.",
+            cfg.mapping_file,
+        )
+
     log.info("Проверяю составы %d команд", len(teams))
     rosters = client.rosters(list(teams))
 
@@ -51,27 +61,42 @@ def run_once(cfg, client: FantraxClient, state: State) -> int:
     for team_id, team_name in teams.items():
         issues.extend(detect_issues(team_id, team_name, rosters[team_id]))
 
-    current = {issue.key(): issue.severity for issue in issues}
+    mapped_issues = [i for i in issues if i.team_id in chat_ids]
+    unmapped_teams = sorted(
+        {i.team_name for i in issues if i.team_id not in chat_ids}
+    )
+    if unmapped_teams:
+        log.warning(
+            "Есть проблемы у команд без привязки (нет chat_id): %s",
+            ", ".join(unmapped_teams),
+        )
+
     to_notify = [
-        issue for issue in issues if state.get(issue.key()) != issue.severity
+        i for i in mapped_issues if state.get(i.key()) != i.severity
     ]
 
-    if to_notify:
-        checked_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-        text = build_message(to_notify, checked_at)
+    checked_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    by_chat: dict[str, list[PlayerIssue]] = defaultdict(list)
+    for issue in to_notify:
+        by_chat[chat_ids[issue.team_id]].append(issue)
+
+    for chat_id, chat_issues in by_chat.items():
+        text = build_message(chat_issues, checked_at)
         if cfg.dry_run:
-            log.info("[dry-run] Было бы отправлено:\n%s", text)
+            log.info("[dry-run] В %s было бы отправлено:\n%s", chat_id, text)
         else:
-            send_telegram(cfg.telegram_bot_token, cfg.telegram_chat_id, text)
+            send_telegram(cfg.telegram_bot_token, chat_id, text)
             log.info(
-                "Отправлено уведомление о %d игроках (всего проблемных: %d)",
-                len(to_notify),
-                len(issues),
+                "Отправлено уведомление в %s о %d игроках", chat_id, len(chat_issues)
             )
+
+    if to_notify:
+        log.info("Всего новых проблем: %d (проблемных игроков: %d)", len(to_notify), len(issues))
     else:
         log.info("Новых проблем нет (проблемных игроков сейчас: %d)", len(issues))
 
-    state.replace_and_save(current)
+    # Помечаем как «отправлено» только проблемы привязанных команд.
+    state.replace_and_save({i.key(): i.severity for i in mapped_issues})
     return 0
 
 
@@ -98,10 +123,10 @@ def main() -> int:
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
 
-    if not cfg.dry_run and (not cfg.telegram_bot_token or not cfg.telegram_chat_id):
+    if not cfg.dry_run and not cfg.telegram_bot_token:
         log.error(
-            "Не заданы TELEGRAM_BOT_TOKEN и TELEGRAM_CHAT_ID. "
-            "Заполните .env (см. README) или запустите с --dry-run."
+            "Не задан TELEGRAM_BOT_TOKEN. Заполните .env (см. README) "
+            "или запустите с --dry-run."
         )
         return 1
 

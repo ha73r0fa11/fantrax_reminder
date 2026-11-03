@@ -20,7 +20,7 @@ def _as_bool(value: str) -> bool:
 class Config:
     league_id: str
     telegram_bot_token: str
-    telegram_chat_id: str
+    mapping_file: str
     poll_interval_seconds: int
     state_file: str
     dry_run: bool
@@ -34,7 +34,7 @@ def load_config() -> Config:
     return Config(
         league_id=os.environ.get("FANTRAX_LEAGUE_ID", DEFAULT_LEAGUE_ID),
         telegram_bot_token=os.environ.get("TELEGRAM_BOT_TOKEN", ""),
-        telegram_chat_id=os.environ.get("TELEGRAM_CHAT_ID", ""),
+        mapping_file=os.environ.get("MAPPING_FILE", "mapping.json"),
         poll_interval_seconds=max(10, poll_minutes * 60),
         state_file=os.environ.get("STATE_FILE", "state.json"),
         dry_run=_as_bool(os.environ.get("DRY_RUN", "false")),
