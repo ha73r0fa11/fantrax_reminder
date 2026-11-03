@@ -81,8 +81,11 @@ Telegram разрешает боту писать только тем, кто у
 
 1. `cp .env.example .env` и впишите `TELEGRAM_BOT_TOKEN` (от
    [@BotFather](https://t.me/BotFather)).
-2. `cp mapping.example.json mapping.json` и заполните привязку.
-3. Запустите:
+2. `mkdir -p data` — здесь будут `state.json`, `mapping.json` и
+   `participants.json`.
+3. `cp participants.example.json data/participants.json` и впишите @username
+   участников.
+4. Запустите:
 
    ```bash
    docker compose up -d --build
@@ -90,8 +93,14 @@ Telegram разрешает боту писать только тем, кто у
 
    Логи: `docker compose logs -f fantrax-bot`.
 
-Файл `mapping.json` монтируется в контейнер как read-only и читается на каждой
-проверке, поэтому правки привязки подхватываются без перезапуска.
+5. После того как участники нажмут «Старт», создайте привязку:
+
+   ```bash
+   docker compose run --rm fantrax-bot python -m bot.link
+   ```
+
+`mapping.json` перечитывается на каждой проверке, поэтому правки привязки
+подхватываются без перезапуска.
 
 ## Запуск без Docker
 
@@ -100,8 +109,9 @@ python -m venv .venv
 # Windows: .venv\Scripts\activate ; Linux/macOS: source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env          # впишите токен
-cp mapping.example.json mapping.json   # заполните привязку
-python -m bot.get_chat_id     # узнать chat_id участника
+cp participants.example.json participants.json  # @username участников
+python -m bot.get_chat_id     # посмотреть, кто уже запустил бота
+python -m bot.link            # собрать mapping.json
 python -m bot.mapping         # проверить привязку
 python -m bot.main            # цикл проверки
 ```
@@ -123,11 +133,15 @@ cd fantrax_reminder
 
 # 3) конфигурация
 cp .env.example .env            # вписать TELEGRAM_BOT_TOKEN
-cp mapping.example.json mapping.json   # вписать привязку
+mkdir -p data
+cp participants.example.json data/participants.json   # @username участников
 
 # 4) запуск
 docker compose up -d --build
 docker compose logs -f fantrax-bot
+
+# 5) после того как участники нажмут «Старт» — собрать привязку
+docker compose run --rm fantrax-bot python -m bot.link
 ```
 
 Для автостарта при перезагрузке сервера `restart: unless-stopped` уже задан в
@@ -140,6 +154,7 @@ docker compose logs -f fantrax-bot
 | `FANTRAX_LEAGUE_ID` | `rwoc4s02mrui4mac` | ID лиги из URL |
 | `TELEGRAM_BOT_TOKEN` | — | токен бота от @BotFather |
 | `MAPPING_FILE` | `mapping.json` | путь к файлу привязки (в Docker — `/data/mapping.json`) |
+| `PARTICIPANTS_FILE` | `participants.json` | список участников для `bot.link` (в Docker — `/data/participants.json`) |
 | `POLL_INTERVAL_MINUTES` | `30` | интервал опроса Fantrax |
 | `LOG_LEVEL` | `INFO` | `DEBUG` / `INFO` / `WARNING` / `ERROR` |
 | `DRY_RUN` | `false` | `true` — не слать в Telegram, только логировать |
@@ -176,4 +191,5 @@ bot/
 - API Fantrax — **неофициальный**. Его структура может измениться без
   предупреждения; если бот перестал получать данные, проверьте логи.
 - Данные лиги должны быть публичными (в этой лиге они отдаются без логина).
-- `mapping.json` и `state.json` не попадают в git (см. `.gitignore`).
+- `.env`, `data/mapping.json`, `data/participants.json` и `data/state.json`
+  не попадают в git (см. `.gitignore`).

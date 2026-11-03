@@ -91,7 +91,7 @@ def main() -> int:
         print("Не задан TELEGRAM_BOT_TOKEN (см. .env).")
         return 1
 
-    participants = load_participants("participants.json")
+    participants = load_participants(cfg.participants_file)
     usernames = fetch_usernames(cfg.telegram_bot_token)
 
     teams = FantraxClient(cfg.league_id).teams()

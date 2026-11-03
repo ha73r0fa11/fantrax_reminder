@@ -5,6 +5,7 @@ state.json
 state.json.tmp
 mapping.json
 participants.json
+data/
 .venv/
 .pytest_cache/
 
