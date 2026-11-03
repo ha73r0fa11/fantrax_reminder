@@ -1,0 +1,13 @@
+.env
+__pycache__/
+*.py[cod]
+state.json
+state.json.tmp
+.venv/
+.pytest_cache/
+
+# IDE/editor metadata
+.idea/
+.gigaide/
+.neo/
+*.iml

@@ -1,0 +1,12 @@
+services:
+  fantrax-bot:
+    build: .
+    env_file: .env
+    environment:
+      - STATE_FILE=/data/state.json
+    volumes:
+      - bot-data:/data
+    restart: unless-stopped
+
+volumes:
+  bot-data:
