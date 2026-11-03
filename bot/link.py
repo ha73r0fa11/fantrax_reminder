@@ -96,29 +96,40 @@ def main() -> int:
 
     teams = FantraxClient(cfg.league_id).teams()
 
+    # Уже собранные привязки сохраняем: обновления Telegram живут ~24 ч,
+    # и без слияния повторный запуск стёр бы старые chat_id.
     mapping: dict[str, str] = {}
+    for key, chat_id in load_mapping(cfg.mapping_file).items():
+        resolved = resolve_team(key, teams)
+        mapping[resolved[1] if resolved else str(key)] = str(chat_id)
+
     unresolved_user: list[str] = []
     unknown_team: list[str] = []
+    linked = 0
 
     for team_key, username in participants.items():
         clean = str(username).strip().lstrip("@").lower()
         chat_id = usernames.get(clean)
-        if chat_id is None:
-            unresolved_user.append(f"{team_key} -> @{clean}")
-            continue
-
         resolved = resolve_team(team_key, teams)
+
         if resolved is None:
             unknown_team.append(str(team_key))
             continue
 
+        if chat_id is None:
+            if resolved[1] not in mapping:
+                unresolved_user.append(f"{team_key} -> @{clean}")
+            continue
+
         mapping[resolved[1]] = chat_id
+        linked += 1
 
     with open(cfg.mapping_file, "w", encoding="utf-8") as f:
         json.dump(mapping, f, ensure_ascii=False, indent=2)
         f.write("\n")
 
-    print(f"Записано в {cfg.mapping_file}: {len(mapping)} команд")
+    print(f"Записано в {cfg.mapping_file}: {len(mapping)} команд "
+          f"(новых в этом запуске: {linked})")
     for name, chat_id in sorted(mapping.items()):
         print(f"  {name} -> {chat_id}")
 

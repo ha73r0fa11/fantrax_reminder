@@ -80,23 +80,34 @@ def run_once(cfg, client: FantraxClient, state: State) -> int:
     for issue in to_notify:
         by_chat[chat_ids[issue.team_id]].append(issue)
 
+    delivered: list[str] = []
+
     for chat_id, chat_issues in by_chat.items():
         text = build_message(chat_issues, checked_at)
         if cfg.dry_run:
             log.info("[dry-run] В %s было бы отправлено:\n%s", chat_id, text)
-        else:
+            delivered.append(chat_id)
+            continue
+        try:
             send_telegram(cfg.telegram_bot_token, chat_id, text)
+            delivered.append(chat_id)
             log.info(
                 "Отправлено уведомление в %s о %d игроках", chat_id, len(chat_issues)
             )
+        except Exception as exc:
+            # Один недоступный участник не должен блокировать остальных.
+            # Его проблемы не помечаем отправленными — повторим в след. цикле.
+            log.error("Не удалось отправить в %s: %s", chat_id, exc)
 
     if to_notify:
         log.info("Всего новых проблем: %d (проблемных игроков: %d)", len(to_notify), len(issues))
     else:
         log.info("Новых проблем нет (проблемных игроков сейчас: %d)", len(issues))
 
-    # Помечаем как «отправлено» только проблемы привязанных команд.
-    state.replace_and_save({i.key(): i.severity for i in mapped_issues})
+    # Помечаем отправленными только те проблемы, чьё сообщение дошло.
+    state.replace_and_save(
+        {i.key(): i.severity for i in mapped_issues if chat_ids[i.team_id] in delivered}
+    )
     return 0
 
 
