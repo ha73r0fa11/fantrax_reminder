@@ -4,6 +4,7 @@ __pycache__/
 state.json
 state.json.tmp
 mapping.json
+participants.json
 .venv/
 .pytest_cache/
 
