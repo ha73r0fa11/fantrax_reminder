@@ -60,6 +60,31 @@ def load_participants(path: str) -> dict[str, str]:
     return data
 
 
+def resolve_team(team_key: str, teams: dict[str, str]) -> tuple[str, str] | None:
+    """Находит команду по ID, точному имени или его началу.
+
+    Возвращает (team_id, каноническое имя) или None, если команда
+    не найдена либо подходящих несколько.
+    """
+    key = str(team_key).strip()
+    if key in teams:
+        return key, teams[key]
+
+    lowered = key.lower()
+    exact = [
+        (tid, name) for tid, name in teams.items()
+        if name.strip().lower() == lowered
+    ]
+    if exact:
+        return exact[0]
+
+    partial = [
+        (tid, name) for tid, name in teams.items()
+        if name.strip().lower().startswith(lowered)
+    ]
+    return partial[0] if len(partial) == 1 else None
+
+
 def main() -> int:
     cfg = load_config()
     if not cfg.telegram_bot_token:
@@ -70,7 +95,6 @@ def main() -> int:
     usernames = fetch_usernames(cfg.telegram_bot_token)
 
     teams = FantraxClient(cfg.league_id).teams()
-    by_name = {name.strip().lower(): team_id for team_id, name in teams.items()}
 
     mapping: dict[str, str] = {}
     unresolved_user: list[str] = []
@@ -83,21 +107,12 @@ def main() -> int:
             unresolved_user.append(f"{team_key} -> @{clean}")
             continue
 
-        if team_key in teams:
-            canonical = teams[team_key]
-        else:
-            canonical = next(
-                (name for tid, name in teams.items()
-                 if name.strip().lower() == str(team_key).strip().lower()),
-                None,
-            )
-            if canonical is None and str(team_key).lower() in by_name:
-                canonical = teams[by_name[str(team_key).lower()]]
-        if canonical is None:
+        resolved = resolve_team(team_key, teams)
+        if resolved is None:
             unknown_team.append(str(team_key))
             continue
 
-        mapping[canonical] = chat_id
+        mapping[resolved[1]] = chat_id
 
     with open(cfg.mapping_file, "w", encoding="utf-8") as f:
         json.dump(mapping, f, ensure_ascii=False, indent=2)
