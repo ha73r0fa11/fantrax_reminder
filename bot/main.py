@@ -18,6 +18,7 @@ from datetime import datetime, timedelta, timezone
 from .config import load_config
 from .fantrax import FantraxClient
 from .joins import handle_starts
+from .lineups import announced_events
 from .mapping import load_mapping, resolve_chat_ids
 from .notifier import send_telegram
 from .state import State
@@ -105,11 +106,44 @@ def run_once(cfg, client: FantraxClient, state: State) -> int:
     else:
         log.info("Новых проблем нет (проблемных игроков сейчас: %d)", len(issues))
 
+    notify_lineups(cfg, state, rosters)
+
     # Помечаем отправленными только те проблемы, чьё сообщение дошло.
     state.replace_and_save(
         {i.key(): i.severity for i in mapped_issues if chat_ids[i.team_id] in delivered}
     )
     return 0
+
+
+def notify_lineups(cfg, state: State, rosters: dict[str, dict]) -> None:
+    """Сообщает в чат группы о матчах, на которые появились составы."""
+    new_events = [
+        event
+        for event in announced_events(rosters)
+        if event.event_id not in state.lineup_events
+    ]
+    if not new_events:
+        return
+
+    # Без настроенного чата составы просто запоминаем, чтобы потом не
+    # прислать пачкой задним числом.
+    delivered: list[str] = []
+    if cfg.lineups_chat_id and not cfg.dry_run:
+        for event in new_events:
+            text = f"⚽️ Составы появились: {event.title()}"
+            if event.kickoff:
+                text += f" ({event.kickoff})"
+            try:
+                send_telegram(cfg.telegram_bot_token, cfg.lineups_chat_id, text)
+                delivered.append(event.event_id)
+                log.info("Составы объявлены: %s", event.title())
+            except Exception as exc:
+                log.error(
+                    "Не удалось отправить составы в %s: %s", cfg.lineups_chat_id, exc
+                )
+    state.add_lineup_events(
+        [event.event_id for event in new_events] if not cfg.lineups_chat_id else delivered
+    )
 
 
 def next_check_at(

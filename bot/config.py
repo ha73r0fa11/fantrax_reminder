@@ -21,6 +21,7 @@ class Config:
     league_id: str
     telegram_bot_token: str
     admin_chat_id: str
+    lineups_chat_id: str
     mapping_file: str
     participants_file: str
     poll_interval_seconds: int
@@ -38,6 +39,7 @@ def load_config() -> Config:
         league_id=os.environ.get("FANTRAX_LEAGUE_ID", DEFAULT_LEAGUE_ID),
         telegram_bot_token=os.environ.get("TELEGRAM_BOT_TOKEN", ""),
         admin_chat_id=os.environ.get("ADMIN_CHAT_ID", ""),
+        lineups_chat_id=os.environ.get("LINEUPS_CHAT_ID", ""),
         mapping_file=os.environ.get("MAPPING_FILE", "mapping.json"),
         participants_file=os.environ.get("PARTICIPANTS_FILE", "participants.json"),
         poll_interval_seconds=max(10, poll_minutes * 60),

@@ -25,6 +25,10 @@ log = logging.getLogger("fantrax_bot")
 # апдейтов за последние сутки), дальше ходим по offset-у.
 _offset: int | None = None
 
+# Чаты, о которых администратору уже сообщили. В группе сообщений много,
+# а уведомление нужно один раз — о самом факте нового чата.
+_reported_chats: set[str] = set()
+
 
 def fetch_updates(token: str, offset: int | None) -> tuple[list[dict], int | None]:
     """Возвращает (апдейты, новый offset); предыдущая пачка этим подтверждается."""
@@ -129,9 +133,14 @@ def handle_starts(cfg: Config, client: FantraxClient) -> None:
         return
 
     updates, _offset = fetch_updates(cfg.telegram_bot_token, _offset)
-    chats = message_chats(updates)
+    chats = [
+        chat
+        for chat in message_chats(updates)
+        if str(chat["id"]) not in _reported_chats
+    ]
     if not chats:
         return
+    _reported_chats.update(str(chat["id"]) for chat in chats)
 
     mapping = load_mapping(cfg.mapping_file)
     messages, changed = apply_chats(

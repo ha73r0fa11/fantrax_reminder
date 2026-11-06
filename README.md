@@ -39,6 +39,13 @@ in upcoming/current game» (`32`). Правила лежат в `bot/statuses.py
    бот шлёт сообщение **владельцу команды** согласно `mapping.json`.
 4. Состояние хранится в `state.json`, чтобы не слать повторные уведомления.
 
+Отдельно бот сообщает в группу (`LINEUPS_CHAT_ID`), когда на матч
+**появляются составы**: у любого игрока матча в Fantrax появляется иконка
+«Starting» или «On the bench». В сообщении — команды и время начала, например
+«⚽️ Составы появились: Coventry City — Everton (Fri 3:00PM)». Каждый матч
+объявляется один раз; видны только матчи, где играет хотя бы один игрок из
+составов лиги.
+
 ## Требования
 
 - Docker (рекомендуется) **или** Python 3.12+ для запуска без Docker.
@@ -172,6 +179,7 @@ docker compose run --rm fantrax-bot python -m bot.link
 | `FANTRAX_LEAGUE_ID` | `rwoc4s02mrui4mac` | ID лиги из URL |
 | `TELEGRAM_BOT_TOKEN` | — | токен бота от @BotFather |
 | `ADMIN_CHAT_ID` | — | кому писать «кто нажал Старт» (пусто — не писать) |
+| `LINEUPS_CHAT_ID` | — | группа для сообщений «составы на матч появились» (пусто — не писать) |
 | `MAPPING_FILE` | `mapping.json` | путь к файлу привязки (в Docker — `/data/mapping.json`) |
 | `PARTICIPANTS_FILE` | `participants.json` | список участников для `bot.link` (в Docker — `/data/participants.json`) |
 | `POLL_INTERVAL_MINUTES` | `30` | интервал опроса Fantrax |
@@ -201,6 +209,7 @@ bot/
   mapping.py      # привязка команда -> chat_id (mapping.json)
   link.py         # ручной сбор chat_id по @username -> mapping.json
   joins.py        # новые «Старты»: привязка и уведомление администратора
+  lineups.py      # появление составов на матч (группа LINEUPS_CHAT_ID)
   notifier.py     # отправка сообщений в Telegram
   state.py        # дедупликация уведомлений (state.json)
   get_chat_id.py  # утилита: узнать chat_id
