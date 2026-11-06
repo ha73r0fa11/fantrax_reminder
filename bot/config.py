@@ -23,6 +23,7 @@ class Config:
     mapping_file: str
     participants_file: str
     poll_interval_seconds: int
+    poll_align_minutes: int
     state_file: str
     dry_run: bool
     log_level: str
@@ -38,6 +39,7 @@ def load_config() -> Config:
         mapping_file=os.environ.get("MAPPING_FILE", "mapping.json"),
         participants_file=os.environ.get("PARTICIPANTS_FILE", "participants.json"),
         poll_interval_seconds=max(10, poll_minutes * 60),
+        poll_align_minutes=int(os.environ.get("POLL_ALIGN_MINUTES", 20)),
         state_file=os.environ.get("STATE_FILE", "state.json"),
         dry_run=_as_bool(os.environ.get("DRY_RUN", "false")),
         log_level=os.environ.get("LOG_LEVEL", "INFO").upper(),

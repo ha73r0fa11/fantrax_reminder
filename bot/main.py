@@ -13,7 +13,7 @@ import signal
 import sys
 import time
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from .config import load_config
 from .fantrax import FantraxClient
@@ -111,6 +111,22 @@ def run_once(cfg, client: FantraxClient, state: State) -> int:
     return 0
 
 
+def next_check_at(
+    now: datetime, interval_seconds: int, align_seconds: int
+) -> datetime:
+    """Ближайшая после ``now`` точка расписания.
+
+    Проверки идут каждые ``interval_seconds`` со сдвигом ``align_seconds``
+    от начала часа: для 30 минут и сдвига 20 минут — в :20 и :50.
+    """
+    midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    elapsed = (now - midnight).total_seconds()
+    remainder = (elapsed - align_seconds) % interval_seconds
+    return midnight + timedelta(
+        seconds=elapsed + interval_seconds - remainder
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Fantrax -> Telegram уведомления")
     parser.add_argument(
@@ -163,11 +179,19 @@ def main() -> int:
         if args.once:
             return 0
 
+        # Проверки привязываем к сетке времени (:20 и :50), а не к моменту
+        # запуска — иначе расписание медленно уезжает вперёд.
+        target = next_check_at(
+            datetime.now(), cfg.poll_interval_seconds, cfg.poll_align_minutes * 60
+        )
+        log.info("Следующая проверка в %s", target.strftime("%H:%M"))
+
         # Спим по частям, чтобы быстрее реагировать на сигнал остановки.
-        waited = 0
-        while waited < cfg.poll_interval_seconds and not stop:
-            time.sleep(min(5, cfg.poll_interval_seconds - waited))
-            waited += 5
+        while not stop:
+            remaining = (target - datetime.now()).total_seconds()
+            if remaining <= 0:
+                break
+            time.sleep(min(5, remaining))
 
     return 0
 

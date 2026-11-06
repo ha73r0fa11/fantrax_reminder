@@ -28,9 +28,10 @@ play in upcoming/current game» (`typeId=32`) означают, что с игр
 
 ## Как это работает
 
-1. Бот раз в `POLL_INTERVAL_MINUTES` опрашивает неофициальный API Fantrax
-   (`POST https://www.fantrax.com/fxpa/req`) — составы всех команд одним
-   пакетным запросом.
+1. Бот каждые `POLL_INTERVAL_MINUTES` (по умолчанию 30) опрашивает
+   неофициальный API Fantrax — составы всех команд одним пакетным запросом.
+   Запуски привязаны к сетке времени: при сдвиге `POLL_ALIGN_MINUTES=20` это
+   :20 и :50 каждого часа, независимо от момента старта контейнера.
 2. Для каждого игрока в слоте Active смотрит иконки статуса.
 3. Если появился новый «проблемный» игрок (или статус изменился — например
    «под вопросом» стал «выбыл»), бот шлёт сообщение **владельцу команды**
@@ -168,6 +169,7 @@ docker compose run --rm fantrax-bot python -m bot.link
 | `MAPPING_FILE` | `mapping.json` | путь к файлу привязки (в Docker — `/data/mapping.json`) |
 | `PARTICIPANTS_FILE` | `participants.json` | список участников для `bot.link` (в Docker — `/data/participants.json`) |
 | `POLL_INTERVAL_MINUTES` | `30` | интервал опроса Fantrax |
+| `POLL_ALIGN_MINUTES` | `20` | сетка запуска: проверки в те же минуты каждый интервал (при 30 мин — в :20 и :50) |
 | `LOG_LEVEL` | `INFO` | `DEBUG` / `INFO` / `WARNING` / `ERROR` |
 | `DRY_RUN` | `false` | `true` — не слать в Telegram, только логировать |
 | `STATE_FILE` | `state.json` | путь к файлу состояния (в Docker — `/data/state.json`) |
