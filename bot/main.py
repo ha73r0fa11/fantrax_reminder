@@ -18,7 +18,7 @@ from datetime import datetime, timedelta, timezone
 from .config import load_config
 from .fantrax import FantraxClient
 from .joins import handle_starts
-from .lineups import announced_events
+from .lineups import announced_events, kickoff_msk
 from .mapping import load_mapping, resolve_chat_ids
 from .notifier import send_telegram
 from .state import State
@@ -131,8 +131,9 @@ def notify_lineups(cfg, state: State, rosters: dict[str, dict]) -> None:
     if cfg.lineups_chat_id and not cfg.dry_run:
         for event in new_events:
             text = f"⚽️ Составы появились: {event.title()}"
-            if event.kickoff:
-                text += f" ({event.kickoff})"
+            when = kickoff_msk(event.kickoff, datetime.now(timezone.utc))
+            if when:
+                text += f" ({when})"
             try:
                 send_telegram(cfg.telegram_bot_token, cfg.lineups_chat_id, text)
                 delivered.append(event.event_id)

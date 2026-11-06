@@ -3,8 +3,9 @@ import json
 import os
 import tempfile
 import unittest
+from datetime import datetime, timezone
 
-from bot.lineups import MatchEvent, announced_events
+from bot.lineups import MatchEvent, announced_events, kickoff_msk
 from bot.state import State
 
 
@@ -76,6 +77,24 @@ class AnnouncedEventsTest(unittest.TestCase):
 
     def test_title_falls_back_to_short_name(self):
         self.assertEqual(MatchEvent("e5", {"COV": "Coventry City"}).title(), "Coventry City")
+
+
+class KickoffMskTest(unittest.TestCase):
+    NOW = datetime(2026, 11, 4, 12, 0, tzinfo=timezone.utc)  # среда, зимнее время
+
+    def test_weekday_and_time_are_translated(self):
+        self.assertEqual(kickoff_msk("Fri 3:00PM", self.NOW), "пятница, 23:00 МСК")
+
+    def test_morning_kickoff(self):
+        self.assertEqual(kickoff_msk("Sat 10:00AM", self.NOW), "суббота, 18:00 МСК")
+
+    def test_summer_time_is_taken_into_account(self):
+        now = datetime(2026, 7, 1, 12, 0, tzinfo=timezone.utc)
+        self.assertEqual(kickoff_msk("Sun 9:00AM", now), "воскресенье, 16:00 МСК")
+
+    def test_unparsable_kickoff_is_empty(self):
+        self.assertEqual(kickoff_msk("", self.NOW), "")
+        self.assertEqual(kickoff_msk("TBD", self.NOW), "")
 
 
 class StateLineupEventsTest(unittest.TestCase):
