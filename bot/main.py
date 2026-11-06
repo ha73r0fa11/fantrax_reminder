@@ -17,6 +17,7 @@ from datetime import datetime, timedelta, timezone
 
 from .config import load_config
 from .fantrax import FantraxClient
+from .joins import handle_starts
 from .mapping import load_mapping, resolve_chat_ids
 from .notifier import send_telegram
 from .state import State
@@ -175,6 +176,12 @@ def main() -> int:
             run_once(cfg, client, state)
         except Exception as exc:  # не падаем в цикле
             log.exception("Ошибка проверки: %s", exc)
+
+        if not cfg.dry_run:
+            try:
+                handle_starts(cfg, client)
+            except Exception as exc:  # не падаем в цикле
+                log.exception("Ошибка обработки новых участников: %s", exc)
 
         if args.once:
             return 0

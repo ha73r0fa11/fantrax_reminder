@@ -61,9 +61,13 @@ Telegram разрешает боту писать только тем, кто у
    ```
 
 2. Попросите всех участников нажать «Старт» у бота (отправить ему любое
-   сообщение).
+   сообщение). Бот сам привяжет того, чей `@username` есть в
+   `participants.json`, запишет `mapping.json` и напишет об этом на
+   `ADMIN_CHAT_ID`. Незнакомые username тоже попадают в уведомление —
+   с их `chat_id`, чтобы можно было дописать вручную.
 
-3. Соберите `mapping.json` автоматически:
+3. Если бот был выключен или нужна сводка «кто ещё не нажал»,
+   привязку можно собрать вручную:
 
    ```bash
    python -m bot.link
@@ -167,6 +171,7 @@ docker compose run --rm fantrax-bot python -m bot.link
 |---|---|---|
 | `FANTRAX_LEAGUE_ID` | `rwoc4s02mrui4mac` | ID лиги из URL |
 | `TELEGRAM_BOT_TOKEN` | — | токен бота от @BotFather |
+| `ADMIN_CHAT_ID` | — | кому писать «кто нажал Старт» (пусто — не писать) |
 | `MAPPING_FILE` | `mapping.json` | путь к файлу привязки (в Docker — `/data/mapping.json`) |
 | `PARTICIPANTS_FILE` | `participants.json` | список участников для `bot.link` (в Docker — `/data/participants.json`) |
 | `POLL_INTERVAL_MINUTES` | `30` | интервал опроса Fantrax |
@@ -194,7 +199,8 @@ bot/
   fantrax.py      # HTTP-клиент к API Fantrax (пакетные запросы)
   statuses.py     # детекция «не выйдет со старта» по иконкам статуса
   mapping.py      # привязка команда -> chat_id (mapping.json)
-  link.py         # сбор chat_id по @username -> mapping.json
+  link.py         # ручной сбор chat_id по @username -> mapping.json
+  joins.py        # новые «Старты»: привязка и уведомление администратора
   notifier.py     # отправка сообщений в Telegram
   state.py        # дедупликация уведомлений (state.json)
   get_chat_id.py  # утилита: узнать chat_id
