@@ -40,7 +40,34 @@ class DetectIssuesTest(unittest.TestCase):
         self.assertEqual(issues[0].severity, "DOUBTFUL")
 
     def test_expected_to_play_is_not_an_issue(self):
-        resp = _roster([_row("1", _scorer([{"typeId": "32", "tooltip": "Expected to play"}]))])
+        resp = _roster([_row("1", _scorer([{"typeId": "32", "tooltip": "Expected to play in upcoming/current game"}]))])
+        self.assertEqual(detect_issues("t1", "Team", resp), [])
+
+    def test_starting_is_not_an_issue(self):
+        resp = _roster([_row("1", _scorer([{"typeId": "12", "tooltip": "Starting in upcoming/current game"}]))])
+        self.assertEqual(detect_issues("t1", "Team", resp), [])
+
+    def test_on_the_bench_is_an_issue(self):
+        resp = _roster([_row("1", _scorer([{"typeId": "34", "tooltip": "On the bench, potential substitute"}]))])
+        issues = detect_issues("t1", "Team", resp)
+        self.assertEqual(len(issues), 1)
+        self.assertEqual(issues[0].severity, "NOT_STARTING")
+
+    def test_not_starting_is_detected_by_tooltip(self):
+        icons = [{"typeId": "99", "tooltip": "Not starting in upcoming/current game"}]
+        resp = _roster([_row("1", _scorer(icons))])
+        issues = detect_issues("t1", "Team", resp)
+        self.assertEqual(len(issues), 1)
+        self.assertEqual(issues[0].severity, "NOT_STARTING")
+
+    def test_news_mentioning_bench_is_not_an_issue(self):
+        icons = [
+            {
+                "typeId": "8",
+                "tooltip": "Oct 10, 6:22 AM: Wilson (quadriceps) is on the bench for...",
+            }
+        ]
+        resp = _roster([_row("1", _scorer(icons))])
         self.assertEqual(detect_issues("t1", "Team", resp), [])
 
     def test_reserve_slot_is_ignored(self):
@@ -60,6 +87,16 @@ class DetectIssuesTest(unittest.TestCase):
         issues = detect_issues("t1", "Team", resp)
         self.assertEqual(len(issues), 1)
         self.assertEqual(issues[0].severity, "OUT")
+
+    def test_bench_has_priority_over_doubtful(self):
+        icons = [
+            {"typeId": "1", "tooltip": "Late fitness test"},
+            {"typeId": "34", "tooltip": "On the bench, potential substitute"},
+        ]
+        resp = _roster([_row("1", _scorer(icons))])
+        issues = detect_issues("t1", "Team", resp)
+        self.assertEqual(len(issues), 1)
+        self.assertEqual(issues[0].severity, "NOT_STARTING")
 
 
 if __name__ == "__main__":

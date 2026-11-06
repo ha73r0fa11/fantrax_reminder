@@ -16,9 +16,14 @@
 |---|---|---|
 | Out for next game | `typeId=30` | выбыл, точно не сыграет |
 | Suspended | `typeId=6` | дисквалификация, точно не сыграет |
+| On the bench, potential substitute | `typeId=34` | не в старте, в лучшем случае выйдет на замену |
+| Not starting in upcoming/current game | по тексту подсказки | объявлен состав, игрока в нём нет |
 | Late fitness test / Game-time decision | `typeId=1` | под вопросом, может не выйти со старта |
 
-Остальные статусы (в т.ч. «Expected to play») игнорируются. Правила лежат в
+Статусы «Starting in upcoming/current game» (`typeId=12`) и «Expected to
+play in upcoming/current game» (`typeId=32`) означают, что с игроком всё в
+порядке, — они игнорируются, как и остальные статусы. Иконки состава
+появляются примерно за час до начала матча. Правила лежат в
 `bot/statuses.py` (список `STATUS_RULES`) и легко расширяются.
 
 ## Как это работает

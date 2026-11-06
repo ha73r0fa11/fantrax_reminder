@@ -6,7 +6,15 @@ Fantrax отдаёт у каждого игрока список ``icons`` (ик
 * ``30`` — «Out for next game» (травма/выбыл) — точно не сыграет;
 * ``6``  — «Suspended» (дисквалификация) — точно не сыграет;
 * ``1``  — «Late fitness test (Game-time decision)» — под вопросом;
-* ``32`` — «Expected to play» — ожидается в старте (здоров).
+* ``34`` — «On the bench, potential substitute» — не в старте, выйдет
+  на замену в лучшем случае;
+* «Not starting in upcoming/current game» — не в стартовом составе
+  (составы объявляют примерно за час до матча, отдельного typeId не
+  фиксируем — ловим по тексту подсказки).
+
+Игнорируются: ``32`` («Expected to play in upcoming/current game») и
+``12`` («Starting in upcoming/current game») — игрок в порядке или уже
+в стартовом составе.
 
 Состав разбит на слоты: ``statusId == "1"`` — основной (Active),
 ``"2"`` — скамейка (Reserve), ``"3"`` — лазарет (Injured Reserve).
@@ -18,12 +26,48 @@ from dataclasses import dataclass
 
 ACTIVE_SLOT_STATUS = "1"
 
-# (typeId иконки, код, эмодзи, подпись). Порядок задаёт приоритет:
-# первый совпавший статус считается самым важным для игрока.
-STATUS_RULES: list[tuple[str, str, str, str]] = [
-    ("30", "OUT", "🔴", "не сыграет (Out)"),
-    ("6", "SUSPENDED", "🔴", "дисквалификация"),
-    ("1", "DOUBTFUL", "🟡", "под вопросом (game-time decision)"),
+
+@dataclass(frozen=True)
+class StatusRule:
+    """Правило распознавания иконки статуса.
+
+    Иконка подходит, если её typeId входит в ``type_ids`` либо её
+    подсказка начинается с одного из ``tooltip_prefixes``. Сравниваем
+    начало, а не вхождение: подсказки новостей — это фразы с датой
+    в начале, где «on the bench» может просто упоминаться в тексте.
+    """
+
+    severity: str
+    emoji: str
+    label: str
+    type_ids: frozenset[str] = frozenset()
+    tooltip_prefixes: tuple[str, ...] = ()
+
+    def matches(self, icon: dict) -> bool:
+        if str(icon.get("typeId")) in self.type_ids:
+            return True
+        tooltip = str(icon.get("tooltip") or "").lower()
+        return any(tooltip.startswith(prefix) for prefix in self.tooltip_prefixes)
+
+
+# Порядок задаёт приоритет: первый совпавший статус считается самым важным
+# для игрока. Подтверждённое отсутствие в старте важнее «под вопросом».
+STATUS_RULES: list[StatusRule] = [
+    StatusRule("OUT", "🔴", "не сыграет (Out)", frozenset({"30"})),
+    StatusRule("SUSPENDED", "🔴", "дисквалификация", frozenset({"6"})),
+    StatusRule(
+        "NOT_STARTING",
+        "🟠",
+        "не в стартовом составе",
+        frozenset({"34"}),
+        ("on the bench", "not starting"),
+    ),
+    StatusRule(
+        "DOUBTFUL",
+        "🟡",
+        "под вопросом (game-time decision)",
+        frozenset({"1"}),
+    ),
 ]
 
 
@@ -68,11 +112,8 @@ def detect_issues(
                 continue
 
             icons = scorer.get("icons") or []
-            for type_id, severity, emoji, label in STATUS_RULES:
-                icon = next(
-                    (i for i in icons if str(i.get("typeId")) == type_id),
-                    None,
-                )
+            for rule in STATUS_RULES:
+                icon = next((i for i in icons if rule.matches(i)), None)
                 if icon is not None:
                     issues.append(
                         PlayerIssue(
@@ -82,9 +123,9 @@ def detect_issues(
                             player_name=scorer.get("name", "?"),
                             position=scorer.get("posShortNames", "?"),
                             club=scorer.get("teamName", "?"),
-                            severity=severity,
-                            emoji=emoji,
-                            label=label,
+                            severity=rule.severity,
+                            emoji=rule.emoji,
+                            label=rule.label,
                             reason=icon.get("tooltip") or "",
                         )
                     )
