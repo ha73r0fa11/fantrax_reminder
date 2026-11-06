@@ -1,20 +1,19 @@
-"""Детекция игроков основного состава, которые не выйдут со старта.
+"""Детекция игроков основного состава, которых нет в стартовом составе.
 
-Fantrax отдаёт у каждого игрока список ``icons`` (иконок статуса), где
-``typeId`` кодирует состояние относительно ближайшего/текущего матча:
+Ловим только статусы состава: они появляются примерно за час до матча и
+исчезают после него. Статусы доступности (травмы, дисквалификации, «под
+вопросом») игнорируются намеренно: они висят днями и неделями, а из-за
+правок состава уведомления по ним приходят повторно.
 
-* ``30`` — «Out for next game» (травма/выбыл) — точно не сыграет;
-* ``6``  — «Suspended» (дисквалификация) — точно не сыграет;
-* ``1``  — «Late fitness test (Game-time decision)» — под вопросом;
-* ``34`` — «On the bench, potential substitute» — не в старте, выйдет
-  на замену в лучшем случае;
-* «Not starting in upcoming/current game» — не в стартовом составе
-  (составы объявляют примерно за час до матча, отдельного typeId не
-  фиксируем — ловим по тексту подсказки).
+Проблемой считается иконка (``typeId`` либо текст подсказки):
 
-Игнорируются: ``32`` («Expected to play in upcoming/current game») и
-``12`` («Starting in upcoming/current game») — игрок в порядке или уже
-в стартовом составе.
+* ``34`` — «On the bench, potential substitute»;
+* «Not starting in upcoming/current game» — попадает по тексту подсказки.
+
+Игнорируются: ``12`` «Starting in upcoming/current game», ``32`` «Expected
+to play in upcoming/current game», ``30`` «Out for next game», ``6``
+«Suspended», ``1`` «Late fitness test (Game-time decision)», а также
+новостные иконки игрока.
 
 Состав разбит на слоты: ``statusId == "1"`` — основной (Active),
 ``"2"`` — скамейка (Reserve), ``"3"`` — лазарет (Injured Reserve).
@@ -51,22 +50,14 @@ class StatusRule:
 
 
 # Порядок задаёт приоритет: первый совпавший статус считается самым важным
-# для игрока. Подтверждённое отсутствие в старте важнее «под вопросом».
+# для игрока.
 STATUS_RULES: list[StatusRule] = [
-    StatusRule("OUT", "🔴", "не сыграет (Out)", frozenset({"30"})),
-    StatusRule("SUSPENDED", "🔴", "дисквалификация", frozenset({"6"})),
     StatusRule(
         "NOT_STARTING",
         "🟠",
         "не в стартовом составе",
         frozenset({"34"}),
         ("on the bench", "not starting"),
-    ),
-    StatusRule(
-        "DOUBTFUL",
-        "🟡",
-        "под вопросом (game-time decision)",
-        frozenset({"1"}),
     ),
 ]
 
@@ -82,20 +73,16 @@ class PlayerIssue:
     severity: str
     emoji: str
     label: str
-    reason: str
 
     def key(self) -> str:
         """Уникальный ключ игрока в составе команды для дедупликации."""
         return f"{self.team_id}:{self.player_id}"
 
     def line(self) -> str:
-        base = (
+        return (
             f"{self.emoji} {self.player_name} "
             f"({self.position}, {self.club}) — {self.label}"
         )
-        if self.reason and self.reason.lower() != "suspended":
-            return f"{base}: {self.reason}"
-        return base
 
 
 def detect_issues(
@@ -113,22 +100,21 @@ def detect_issues(
 
             icons = scorer.get("icons") or []
             for rule in STATUS_RULES:
-                icon = next((i for i in icons if rule.matches(i)), None)
-                if icon is not None:
-                    issues.append(
-                        PlayerIssue(
-                            team_id=team_id,
-                            team_name=team_name,
-                            player_id=str(scorer.get("scorerId", "")),
-                            player_name=scorer.get("name", "?"),
-                            position=scorer.get("posShortNames", "?"),
-                            club=scorer.get("teamName", "?"),
-                            severity=rule.severity,
-                            emoji=rule.emoji,
-                            label=rule.label,
-                            reason=icon.get("tooltip") or "",
-                        )
+                if not any(rule.matches(icon) for icon in icons):
+                    continue
+                issues.append(
+                    PlayerIssue(
+                        team_id=team_id,
+                        team_name=team_name,
+                        player_id=str(scorer.get("scorerId", "")),
+                        player_name=scorer.get("name", "?"),
+                        position=scorer.get("posShortNames", "?"),
+                        club=scorer.get("teamName", "?"),
+                        severity=rule.severity,
+                        emoji=rule.emoji,
+                        label=rule.label,
                     )
-                    break  # берём самый приоритетный статус игрока
+                )
+                break  # берём самый приоритетный статус игрока
 
     return issues
