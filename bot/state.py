@@ -19,6 +19,7 @@ class State:
         self._lock = threading.Lock()
         self.notified: dict[str, str] = {}
         self.lineup_events: set[str] = set()
+        self.last_update_id: int | None = None
         self._load()
 
     def _load(self) -> None:
@@ -29,6 +30,8 @@ class State:
             return
         self.notified = dict(data.get("notified", {}))
         self.lineup_events = set(data.get("lineup_events", []))
+        last_update_id = data.get("last_update_id")
+        self.last_update_id = int(last_update_id) if last_update_id is not None else None
 
     def _save(self) -> None:
         tmp = self.path + ".tmp"
@@ -37,6 +40,7 @@ class State:
                 {
                     "notified": self.notified,
                     "lineup_events": sorted(self.lineup_events),
+                    "last_update_id": self.last_update_id,
                 },
                 f,
                 ensure_ascii=False,
@@ -50,6 +54,14 @@ class State:
     def add_lineup_events(self, event_ids: Iterable[str]) -> None:
         with self._lock:
             self.lineup_events.update(event_ids)
+
+    def set_last_update_id(self, update_id: int) -> None:
+        """Запоминает разобранный апдейт Telegram, чтобы не разбирать его снова."""
+        with self._lock:
+            if self.last_update_id == update_id:
+                return
+            self.last_update_id = update_id
+            self._save()
 
     def replace_and_save(self, current: dict[str, str]) -> None:
         """Заменяет состояние текущим набором проблем и атомарно сохраняет."""

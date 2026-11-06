@@ -76,6 +76,15 @@ class ApplyChatsTest(unittest.TestCase):
         self.assertFalse(changed)
         self.assertIn("без @username", messages[0])
 
+    def test_group_chat_is_reported_as_new_chat(self):
+        mapping = {}
+        group = {"id": -1001759538646, "type": "supergroup", "title": "Fantasy ftbll"}
+        messages, changed = apply_chats([group], mapping, PARTICIPANTS, TEAMS)
+        self.assertFalse(changed)
+        self.assertEqual(mapping, {})
+        self.assertIn("Fantasy ftbll", messages[0])
+        self.assertIn("-1001759538646", messages[0])
+
 
 class MessageChatsTest(unittest.TestCase):
     def test_extracts_chats_from_updates(self):

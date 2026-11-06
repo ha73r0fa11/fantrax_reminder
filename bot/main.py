@@ -214,7 +214,7 @@ def main() -> int:
 
         if not cfg.dry_run:
             try:
-                handle_starts(cfg, client)
+                handle_starts(cfg, client, state)
             except Exception as exc:  # не падаем в цикле
                 log.exception("Ошибка обработки новых участников: %s", exc)
 

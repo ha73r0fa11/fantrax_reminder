@@ -124,10 +124,19 @@ class StateLineupEventsTest(unittest.TestCase):
     def test_saved_file_shape(self):
         state = State(self.path)
         state.add_lineup_events(["e1"])
+        state.set_last_update_id(42)
         state.replace_and_save({})
         with open(self.path, encoding="utf-8") as f:
             data = json.load(f)
-        self.assertEqual(data, {"notified": {}, "lineup_events": ["e1"]})
+        self.assertEqual(
+            data,
+            {"notified": {}, "lineup_events": ["e1"], "last_update_id": 42},
+        )
+
+    def test_last_update_id_survives_reload(self):
+        state = State(self.path)
+        state.set_last_update_id(42)
+        self.assertEqual(State(self.path).last_update_id, 42)
 
 
 if __name__ == "__main__":

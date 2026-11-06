@@ -18,16 +18,9 @@ from .fantrax import FantraxClient
 from .link import load_participants, resolve_team
 from .mapping import load_mapping
 from .notifier import send_telegram
+from .state import State
 
 log = logging.getLogger("fantrax_bot")
-
-# None — процесс только запустился: забираем всё непрочитанное (до 100
-# апдейтов за последние сутки), дальше ходим по offset-у.
-_offset: int | None = None
-
-# Чаты, о которых администратору уже сообщили. В группе сообщений много,
-# а уведомление нужно один раз — о самом факте нового чата.
-_reported_chats: set[str] = set()
 
 
 def fetch_updates(token: str, offset: int | None) -> tuple[list[dict], int | None]:
@@ -87,6 +80,12 @@ def apply_chats(
         who = f"@{username}" if username else f"{chat_id} (без @username)"
 
         team_key = by_username.get(username.lower()) if username else None
+        if chat.get("type") in {"group", "supergroup", "channel"}:
+            messages.append(
+                f"Новый чат «{chat.get('title') or chat_id}» (chat_id {chat_id})"
+            )
+            continue
+
         if team_key is None:
             messages.append(
                 f"{who} нажал «Старт», но его нет в participants.json "
@@ -125,43 +124,41 @@ def _load_participants(path: str) -> dict[str, str]:
         return {}
 
 
-def handle_starts(cfg: Config, client: FantraxClient) -> None:
+def handle_starts(cfg: Config, client: FantraxClient, state: State) -> None:
     """Привязывает новых участников и сообщает о них администратору."""
-    global _offset
-
     if not cfg.telegram_bot_token:
         return
 
-    updates, _offset = fetch_updates(cfg.telegram_bot_token, _offset)
-    chats = [
-        chat
-        for chat in message_chats(updates)
-        if str(chat["id"]) not in _reported_chats
-    ]
-    if not chats:
-        return
-    _reported_chats.update(str(chat["id"]) for chat in chats)
+    offset = None if state.last_update_id is None else state.last_update_id + 1
+    updates, new_offset = fetch_updates(cfg.telegram_bot_token, offset)
 
-    mapping = load_mapping(cfg.mapping_file)
-    messages, changed = apply_chats(
-        chats,
-        mapping,
-        _load_participants(cfg.participants_file),
-        client.teams(),
-    )
+    # Один и тот же чат может прислать несколько сообщений — писать о нём один раз.
+    chats = list({str(chat["id"]): chat for chat in message_chats(updates)}.values())
 
-    if changed:
-        with open(cfg.mapping_file, "w", encoding="utf-8") as f:
-            json.dump(mapping, f, ensure_ascii=False, indent=2)
-            f.write("\n")
-        log.info("Привязка обновлена: %s", cfg.mapping_file)
+    if chats:
+        mapping = load_mapping(cfg.mapping_file)
+        messages, changed = apply_chats(
+            chats,
+            mapping,
+            _load_participants(cfg.participants_file),
+            client.teams(),
+        )
 
-    for text in messages:
-        log.info("%s", text)
-        if not cfg.admin_chat_id:
-            continue
-        try:
-            send_telegram(cfg.telegram_bot_token, cfg.admin_chat_id, text)
-        except Exception as exc:
-            # Сбой уведомления не должен ломать цикл проверки.
-            log.error("Не удалось уведомить администратора: %s", exc)
+        if changed:
+            with open(cfg.mapping_file, "w", encoding="utf-8") as f:
+                json.dump(mapping, f, ensure_ascii=False, indent=2)
+                f.write("\n")
+            log.info("Привязка обновлена: %s", cfg.mapping_file)
+
+        for text in messages:
+            log.info("%s", text)
+            if not cfg.admin_chat_id:
+                continue
+            try:
+                send_telegram(cfg.telegram_bot_token, cfg.admin_chat_id, text)
+            except Exception as exc:
+                # Сбой уведомления не должен ломать цикл проверки.
+                log.error("Не удалось уведомить администратора: %s", exc)
+
+    if new_offset is not None:
+        state.set_last_update_id(new_offset)
