@@ -119,7 +119,13 @@ class StateLineupEventsTest(unittest.TestCase):
         os.unlink(self.path)
         state = State(self.path)
         self.assertEqual(state.lineup_events, set())
+        self.assertEqual(state.reported_chats, set())
         self.assertEqual(state.notified, {})
+
+    def test_reported_chats_survive_reload(self):
+        state = State(self.path)
+        state.add_reported_chats(["-100"])
+        self.assertEqual(State(self.path).reported_chats, {"-100"})
 
     def test_saved_file_shape(self):
         state = State(self.path)
@@ -130,7 +136,12 @@ class StateLineupEventsTest(unittest.TestCase):
             data = json.load(f)
         self.assertEqual(
             data,
-            {"notified": {}, "lineup_events": ["e1"], "last_update_id": 42},
+            {
+                "notified": {},
+                "lineup_events": ["e1"],
+                "reported_chats": [],
+                "last_update_id": 42,
+            },
         )
 
     def test_last_update_id_survives_reload(self):

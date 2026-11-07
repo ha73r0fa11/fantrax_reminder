@@ -1,9 +1,9 @@
 """Хранение состояния уведомлений для дедупликации.
 
 Чтобы не спамить чат на каждой проверке, бот запоминает, о каком игроке
-(и с каким статусом) уже сообщал, а также по каким матчам уже объявлял
-появление составов. Повторное уведомление об игроке уходит только если
-его статус изменился.
+(и с каким статусом) уже сообщал, по каким матчам уже объявлял появление
+составов и о каких групповых чатах уже писал администратору. Повторное
+уведомление об игроке уходит только если его статус изменился.
 """
 from __future__ import annotations
 
@@ -19,6 +19,7 @@ class State:
         self._lock = threading.Lock()
         self.notified: dict[str, str] = {}
         self.lineup_events: set[str] = set()
+        self.reported_chats: set[str] = set()
         self.last_update_id: int | None = None
         self._load()
 
@@ -30,6 +31,7 @@ class State:
             return
         self.notified = dict(data.get("notified", {}))
         self.lineup_events = set(data.get("lineup_events", []))
+        self.reported_chats = set(data.get("reported_chats", []))
         last_update_id = data.get("last_update_id")
         self.last_update_id = int(last_update_id) if last_update_id is not None else None
 
@@ -40,6 +42,7 @@ class State:
                 {
                     "notified": self.notified,
                     "lineup_events": sorted(self.lineup_events),
+                    "reported_chats": sorted(self.reported_chats),
                     "last_update_id": self.last_update_id,
                 },
                 f,
@@ -54,6 +57,15 @@ class State:
     def add_lineup_events(self, event_ids: Iterable[str]) -> None:
         with self._lock:
             self.lineup_events.update(event_ids)
+
+    def add_reported_chats(self, chat_ids: Iterable[str]) -> None:
+        """Запоминает групповые чаты, о которых администратору уже сообщили."""
+        new = set(chat_ids) - self.reported_chats
+        if not new:
+            return
+        with self._lock:
+            self.reported_chats.update(new)
+            self._save()
 
     def set_last_update_id(self, update_id: int) -> None:
         """Запоминает разобранный апдейт Telegram, чтобы не разбирать его снова."""

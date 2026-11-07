@@ -1,7 +1,7 @@
 """Тесты привязки новых участников (bot/joins.py)."""
 import unittest
 
-from bot.joins import apply_chats, message_chats
+from bot.joins import apply_chats, message_chats, unreported_chats
 
 TEAMS = {"t1": "rrk", "t2": "BigSummer"}
 PARTICIPANTS = {"rrk": "@alt_t0t", "BigSummer": "@TheFriendofKUTs"}
@@ -84,6 +84,30 @@ class ApplyChatsTest(unittest.TestCase):
         self.assertEqual(mapping, {})
         self.assertIn("Fantasy ftbll", messages[0])
         self.assertIn("-1001759538646", messages[0])
+
+
+class UnreportedChatsTest(unittest.TestCase):
+    GROUP = {"id": -1001759538646, "type": "supergroup", "title": "Fantasy ftbll"}
+
+    def test_configured_lineups_group_is_skipped(self):
+        fresh, groups = unreported_chats([self.GROUP], "-1001759538646", set())
+        self.assertEqual(fresh, [])
+        self.assertEqual(groups, [])
+
+    def test_new_group_is_reported_once(self):
+        fresh, groups = unreported_chats([self.GROUP], "", set())
+        self.assertEqual(fresh, [self.GROUP])
+        self.assertEqual(groups, ["-1001759538646"])
+
+        fresh, groups = unreported_chats([self.GROUP], "", {"-1001759538646"})
+        self.assertEqual(fresh, [])
+        self.assertEqual(groups, [])
+
+    def test_personal_chats_are_always_kept(self):
+        chat = _chat(777, "alt_t0t")
+        fresh, groups = unreported_chats([chat], "-1001759538646", {"777"})
+        self.assertEqual(fresh, [chat])
+        self.assertEqual(groups, [])
 
 
 class MessageChatsTest(unittest.TestCase):

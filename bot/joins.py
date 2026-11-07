@@ -22,6 +22,8 @@ from .state import State
 
 log = logging.getLogger("fantrax_bot")
 
+GROUP_CHAT_TYPES = frozenset({"group", "supergroup", "channel"})
+
 
 def fetch_updates(token: str, offset: int | None) -> tuple[list[dict], int | None]:
     """Возвращает (апдейты, новый offset); предыдущая пачка этим подтверждается."""
@@ -57,6 +59,30 @@ def message_chats(updates: list[dict]) -> list[dict]:
     return chats
 
 
+def unreported_chats(
+    chats: Iterable[dict], lineups_chat_id: str, reported: set[str]
+) -> tuple[list[dict], list[str]]:
+    """Чаты, о которых администратору ещё не сообщали.
+
+    Группа присылает апдейт на каждое сообщение участников, поэтому о каждой
+    из них пишем один раз, а настроенную группу составов не упоминаем вовсе —
+    её chat_id и так известен. Личные чаты не фильтруем: для них решение
+    принимает apply_chats по текущей привязке.
+
+    Возвращает (чаты для обработки, chat_id новых групп).
+    """
+    fresh: list[dict] = []
+    new_groups: list[str] = []
+    for chat in chats:
+        chat_id = str(chat["id"])
+        if str(chat.get("type") or "") in GROUP_CHAT_TYPES:
+            if chat_id == lineups_chat_id or chat_id in reported:
+                continue
+            new_groups.append(chat_id)
+        fresh.append(chat)
+    return fresh, new_groups
+
+
 def apply_chats(
     chats: Iterable[dict],
     mapping: dict[str, Any],
@@ -80,7 +106,7 @@ def apply_chats(
         who = f"@{username}" if username else f"{chat_id} (без @username)"
 
         team_key = by_username.get(username.lower()) if username else None
-        if chat.get("type") in {"group", "supergroup", "channel"}:
+        if chat.get("type") in GROUP_CHAT_TYPES:
             messages.append(
                 f"Новый чат «{chat.get('title') or chat_id}» (chat_id {chat_id})"
             )
@@ -136,6 +162,9 @@ def handle_starts(cfg: Config, client: FantraxClient, state: State) -> None:
     chats = list({str(chat["id"]): chat for chat in message_chats(updates)}.values())
 
     if chats:
+        chats, new_groups = unreported_chats(
+            chats, cfg.lineups_chat_id, state.reported_chats
+        )
         mapping = load_mapping(cfg.mapping_file)
         messages, changed = apply_chats(
             chats,
@@ -159,6 +188,11 @@ def handle_starts(cfg: Config, client: FantraxClient, state: State) -> None:
             except Exception as exc:
                 # Сбой уведомления не должен ломать цикл проверки.
                 log.error("Не удалось уведомить администратора: %s", exc)
+
+        # Без ADMIN_CHAT_ID сообщать некуда — не помечаем, чтобы не потерять
+        # сведения о группе, когда адресат появится.
+        if cfg.admin_chat_id:
+            state.add_reported_chats(new_groups)
 
     if new_offset is not None:
         state.set_last_update_id(new_offset)
